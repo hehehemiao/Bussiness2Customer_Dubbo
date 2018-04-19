@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:dubbo="http://code.alibabatech.com/schema/dubbo"
+	xsi:schemaLocation="http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd
+		http://code.alibabatech.com/schema/dubbo http://code.alibabatech.com/schema/dubbo/dubbo.xsd">
+
+	<context:property-placeholder location="classpath:dbConfig.properties" />
+
+	<context:component-scan base-package="com.zht.service"
+		use-default-filters="false">
+		<context:include-filter type="annotation"
+			expression="org.springframework.stereotype.Service" />
+	</context:component-scan>
+
+	<bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource">
+		<property name="driverClassName" value="${driverClassName}" />
+		<property name="url" value="${url}" />
+		<property name="username" value="${jdbc.username}" />
+		<property name="password" value="${jdbc.password}" />
+	</bean>
+
+	<bean id="sqlSessionFactoryBean" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+		<property name="configLocation" value="classpath:mybatis-config.xml" />
+	</bean>
+
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="com.zht.mapper" />
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactoryBean" />
+	</bean>
+	
+	<!-- 配置数据源事务管理 -->
+	<bean id="txManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	
+	<!-- 配置管理器组件，配置通知 -->
+	<tx:advice transaction-manager="txManager" id="txAdvice">
+		<tx:attributes>
+			<!-- 配置被代理的方法，*代表所有方法，propagation代表事务传播属性，rollback-for回滚策略 -->
+			<tx:method name="*" propagation="REQUIRED" rollback-for="java.lang.Exception"/>
+		</tx:attributes>
+	</tx:advice>
+	
+	<!-- 用切入点表达式,将通知(事务管理器)和连接点(需要被代理的业务层的方法们)整合-->
+	<!-- 切入点表达式：访问权限、返回值任意；com.zht包及其子包；类名或接口名；方法名任意；参数列表任意 -->  
+	<aop:config>
+		<aop:pointcut expression="execution(* com.zht.service..*.*(..))" id="pointcut"/><!-- 先有切面 -->
+		<aop:advisor advice-ref="txAdvice" pointcut-ref="pointcut"/><!-- 再有通知 -->
+	</aop:config>
+	
+	<!-- 通过注解配置事务 -->
+<!-- 	<tx:annotation-driven/> -->
+	
+	<!-- 使用dubbo发布服务 -->
+	<!-- 1.提供方应用信息，用于计算依赖关系, sale_service是当前的容器名 -->
+	<dubbo:application name="sale_service" />
+	
+	<!-- 2.配置注册中心地址 -->
+	<dubbo:registry protocol="zookeeper" address="192.168.40.130:2181" />
+	
+	<!-- 3.用dubbo协议在20880端口暴露服务，在20880端口号下发布出名字为dubbo接口的服务 -->
+	<dubbo:protocol name="dubbo" port="20880" />
+	
+	<!-- 4.声明需要暴露的服务接口,为了把attrServiceImpl发布成AttrService接口类型的dubbo的RPC服务 -->
+	<!-- id是在zookeeper注册中心里面的service的id -->
+	<dubbo:service id="attrService" interface="com.zht.service.AttrService" ref="attrServiceImpl" />
+	<!-- 在打断点调试的时候，设置超时时间，否则报异常 -->
+	<dubbo:service timeout="300000" id="cartService" interface="com.zht.service.CartService" ref="cartServiceImpl" />
+	<dubbo:service id="itemService" interface="com.zht.service.ItemService" ref="itemServiceImpl" />
+	<dubbo:service id="listService" interface="com.zht.service.ListService" ref="listServiceImpl" />
+	<dubbo:service id="orderService" interface="com.zht.service.OrderService" ref="orderServiceImpl" />
+	
+	
+	
+	
+
+</beans>
